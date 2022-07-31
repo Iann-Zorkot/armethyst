@@ -60,17 +60,17 @@ int BasicCPU::run(uint64_t startAddress)
 		MEM();
 		WB();
 	}
-	
+
 	if (cpuError) {
 		return 1;
 	}
-	
+
 	return 0;
 };
 
 /**
  * Busca da instrução.
- * 
+ *
  * Lê a memória de instruções no endereço PC e coloca no registrador IR.
  */
 void BasicCPU::IF()
@@ -80,7 +80,7 @@ void BasicCPU::IF()
 
 /**
  * Decodificação da instrução.
- * 
+ *
  * Decodifica o registrador IR, lê registradores do banco de registradores
  * e escreve em registradores auxiliares o que será usado por estágios
  * posteriores.
@@ -91,31 +91,21 @@ void BasicCPU::IF()
  * Retorna 0: se executou corretamente e
  *		   1: se a instrução não estiver implementada.
  */
-int BasicCPU::ID()
-{
-	// TODO
-	//		Acrescente os cases no switch já iniciado, para detectar o grupo
-	//		APENAS PARA A INSTRUÇÃO A SEGUIR:
-	//				'add w1, w1, w0'
-	//		que aparece na linha 43 de isummation.S e no endereço 0x68
-	//		de txt_isummation.o.txt.
-	//
-	// 		Deve-se detectar em IR o grupo da qual a instrução faz parte e
-	//		chamar a função 'decodeGROUP()' para	o grupo detectado, onde GROUP
-	//		é o sufixo do nome da função que decodifica as instruções daquele
-	//		grupo. Para 'add w1, w1, w0' deve-se chamar 'decodeDataProcReg()'.
-	
+int BasicCPU::ID() {
 	int group = IR & 0x1E000000; // bits 28-25
-	
-	switch (group)
-	{
+
+	switch (group) {
 		//100x Data Processing -- Immediate
 		case 0x10000000: // x = 0
 		case 0x12000000: // x = 1
 			fpOP = false;
 			return decodeDataProcImm();
 			break;
-		// case TODO
+		case 0x0A000000:
+		case 0x1A000000:
+			fpOP = false;
+			return decodeDataProcReg();
+			break;
 		// x101 Data Processing -- Register on page C4-278
 		default:
 			return 1; // instrução não implementada
@@ -136,7 +126,7 @@ int BasicCPU::ID()
 int BasicCPU::decodeDataProcImm() {
 	unsigned int n, d;
 	int imm;
-	
+
 	/* Add/subtract (immediate) (pp. 233-234)
 		This section describes the encoding of the Add/subtract (immediate)
 		instruction class. The encodings in this section are decoded from
@@ -146,9 +136,9 @@ int BasicCPU::decodeDataProcImm() {
 	{
 		case 0xD1000000:
 			//1 1 0 SUB (immediate) - 64-bit variant on page C6-1199
-			
+
 			if (IR & 0x00400000) return 1; // sh = 1 não implementado
-			
+
 			// ler A e B
 			n = (IR & 0x000003E0) >> 5;
 			if (n == 31) {
@@ -158,7 +148,7 @@ int BasicCPU::decodeDataProcImm() {
 			}
 			imm = (IR & 0x003FFC00) >> 10;
 			B = imm;
-			
+
 			// registrador destino
 			d = (IR & 0x0000001F);
 			if (d == 31) {
@@ -166,25 +156,25 @@ int BasicCPU::decodeDataProcImm() {
 			} else {
 				Rd = &(R[d]);
 			}
-			
+
 			// atribuir ALUctrl
 			ALUctrl = ALUctrlFlag::SUB;
-			
+
 			// atribuir MEMctrl
 			MEMctrl = MEMctrlFlag::MEM_NONE;
-			
+
 			// atribuir WBctrl
 			WBctrl = WBctrlFlag::RegWrite;
-			
+
 			// atribuir MemtoReg
 			MemtoReg = false;
-			
+
 			return 0;
 		default:
 			// instrução não implementada
 			return 1;
 	}
-	
+
 	// instrução não implementada
 	return 1;
 }
@@ -221,15 +211,37 @@ int BasicCPU::decodeLoadStore() {
  *		   1: se a instrução não estiver implementada.
  */
 int BasicCPU::decodeDataProcReg() {
-	// TODO
-	//		acrescentar um switch no estilo do switch de decodeDataProcImm,
-	//		e implementar APENAS PARA A INSTRUÇÃO A SEGUIR:
-	//				'add w1, w1, w0'
-	//		que aparece na linha 43 de isummation.S e no endereço 0x68
-	//		de txt_isummation.o.txt.
-	
-	
-	// instrução não implementada
+ unsigned n, d, m;
+
+  switch(IR & 0xFF200000) {
+    case 0x0B000000://32-bits
+    case 0X8B000000://64-bits
+      n = (IR & 0x000003E0) >> 5;
+      if (n == 31) {
+        A = SP;
+      } else {
+        A = getX(n);
+      }
+      d = (IR & 0x0000001F);
+      if (d == 31) {
+        Rd = &SP;
+      } else {
+        Rd = &(R[d]);
+      }
+      m = (IR & 0x001F0000) >> 16;
+      if (m == 31) {
+        B = SP;
+      } else {
+        B = getX(m);
+      }
+      ALUctrl = ALUctrlFlag::SUB;
+      MEMctrl = MEMctrlFlag::MEM_NONE;
+      WBctrl = WBctrlFlag::RegWrite;
+      MemtoReg = false;
+      return 0;
+    default:
+      return 1;
+  }
 	return 1;
 }
 
@@ -249,7 +261,7 @@ int BasicCPU::decodeDataProcFloat() {
 
 /**
  * Execução lógico aritmética inteira.
- * 
+ *
  * Executa a operação lógico aritmética inteira com base nos valores
  * dos registradores auxiliares A, B e ALUctrl, e coloca o resultado
  * no registrador auxiliar ALUout.
@@ -278,15 +290,15 @@ int BasicCPU::EXI()
 			// Controle não implementado
 			return 1;
 	}
-	
+
 	// Controle não implementado
 	return 1;
 };
 
-		
+
 /**
  * Execução lógico aritmética em ponto flutuante.
- * 
+ *
  * Executa a operação lógico aritmética em ponto flutuant com base
  * nos valores dos registradores auxiliares AF, BF e ALUctrl, e coloca o
  * resultado no registrador auxiliar ALUoutF.
@@ -302,7 +314,7 @@ int BasicCPU::EXF()
 
 /**
  * Acesso a dados na memória.
- * 
+ *
  * Retorna 0: se executou corretamente e
  *		   1: se o controle presente nos registradores auxiliares não
  * 				estiver implementado.
@@ -321,7 +333,7 @@ int BasicCPU::MEM()
 
 /**
  * Write-back. Escreve resultado da operação no registrador destino.
- * 
+ *
  * Retorna 0: se executou corretamente e
  *		   1: se o controle presente nos registradores auxiliares não
  * 				estiver implementado.
@@ -332,7 +344,7 @@ int BasicCPU::WB()
 	// Implementar o switch (WBctrl) case WBctrlFlag::XXX com as
 	// atribuições corretas do registrador destino, quando houver, ou
 	// return 0 no caso WBctrlFlag::WB_NONE.
-	
+
 	// não implementado
 	return 1;
 }
