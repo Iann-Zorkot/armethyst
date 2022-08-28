@@ -122,12 +122,14 @@ int BasicCPU::ID()
 		case 0x1A000000:
 			return decodeDataProcReg();
 			break;
-		
-		// TODO
-		// implementar o GRUPO A SEGUIR
-		//
-		// 101x Loads and Stores on page C4-237
 
+		// 101x Loads and Stores on page C4-237
+		case 0x08000000: // 0.100
+		case 0x0C000000: // 0.110
+		case 0x18000000: // 1.100
+		case 0x1C000000: // 1.110
+			return decodeLoadStore();
+			break;
 		
 		// ATIVIDADE FUTURA
 		// implementar os demais grupos
@@ -224,10 +226,72 @@ int BasicCPU::decodeBranches() {
  *		   1: se a instrução não estiver implementada.
  */
 int BasicCPU::decodeLoadStore() {
+	unsigned int n, d, t;
+	int imm;
+
+	switch (IR & 0xFFC00000) {
+
+	case 0xB9800000://LDRSW C6.2.131 Immediate (Unsigned offset) 913
+		// como � escrita em 64 bits, n�o h� problema em decodificar
+
+		n = (IR & 0x000003E0) >> 5;
+			if (n == 31) {
+				A = SP;
+			} else {
+				A = getX(n); 
+			}
+
+		B = (IR & 0x003ffc00) >> 8; 
+
+		Rd = &(R[IR & 0x0000001F]);  
+
+		ALUctrl = ALUctrlFlag::ADD;
+
+				// atribuir MEMctrl
+				MEMctrl = MEMctrlFlag::READ64;
+
+				// atribuir WBctrl
+				WBctrl = WBctrlFlag::RegWrite;
+
+				// atribuir MemtoReg
+				MemtoReg = true; 
+
+		return 0;
+		break;
+
+	case 0xB9000000:
+
+		n = (IR & 0x000003E0) >> 5;
+			if (n == 31) {
+				A = SP;
+			} else {
+				A = getX(n); 
+			}
+
+		B = ((IR & 0x003FFC00) >> 10) << 2; 
+
+		d = (IR & 0x0000001F);
+			if (d == 31) {
+				Rd = &SP;
+			} else {
+				Rd = &(R[d]);
+			}
+
+		ALUctrl = ALUctrlFlag::ADD;
+
+		MEMctrl = MEMctrlFlag::WRITE32;
+
+		WBctrl = WBctrlFlag::WB_NONE;	
+
+		MemtoReg = false;
+
+		return 0;
+		break;
+
+	}
 	// instrução não implementada
 	return 1;
 }
-
 /**
  * Decodifica instruções do grupo
  * 		x101 Data Processing -- Register on page C4-278
@@ -278,8 +342,11 @@ int BasicCPU::decodeDataProcReg() {
 			// atribuir ALUctrl
 			ALUctrl = ALUctrlFlag::ADD;
 			
-			// TODO:
-			// implementar informações para os estágios MEM e WB.
+			MEMctrl = MEMctrlFlag::MEM_NONE;
+
+			WBctrl = WBctrlFlag::RegWrite;
+
+			MemtoReg = false;
 
 			return 0;
 	}
@@ -379,8 +446,9 @@ int BasicCPU::EXI()
 		case ALUctrlFlag::SUB:
 			ALUout = A - B;
 			return 0;
-		//case ALUctrlFlag::ADD:
-		// TODO
+		case ALUctrlFlag::ADD:
+			ALUout = A + B;
+			return 0;
 		default:
 			// Controle não implementado
 			return 1;
@@ -444,22 +512,22 @@ int BasicCPU::MEM()
 	// com as chamadas aos métodos corretos que implementam cada caso de acesso
 	// à memória de dados.
 
-	//switch (MEMctrl) {
-	//case MEMctrlFlag::READ32:
-		//MDR = memory->readData32(ALUout);
-		//return 0;
-	//case MEMctrlFlag::WRITE32:
-		//memory->writeData32(ALUout,*Rd);
-		//return 0;
-	//case MEMctrlFlag::READ64:
-		//MDR = memory->readData64(ALUout);
-		//return 0;
-	//case MEMctrlFlag::WRITE64:
-		//memory->writeData64(ALUout,*Rd);
-		//return 0;
-	//default:
-		//return 0;
-	//}
+	switch (MEMctrl) {
+	case MEMctrlFlag::READ32:
+		MDR = memory->readData32(ALUout);
+		return 0;
+	case MEMctrlFlag::WRITE32:
+		memory->writeData32(ALUout,*Rd);
+		return 0;
+	case MEMctrlFlag::READ64:
+		MDR = memory->readData64(ALUout);
+		return 0;
+	case MEMctrlFlag::WRITE64:
+		memory->writeData64(ALUout,*Rd);
+		return 0;
+	default:
+		return 0;
+	}
 
 	return 1;
 }
@@ -479,20 +547,20 @@ int BasicCPU::WB()
 	// com as atribuições corretas do registrador destino, quando houver, ou
 	// return 0 no caso WBctrlFlag::WB_NONE.
 	
-    //switch (WBctrl) {
-        //case WBctrlFlag::WB_NONE:
-            //return 0;
-        //case WBctrlFlag::RegWrite:
-            //if (MemtoReg) {
-                //*Rd = MDR;
-            //} else {
-                //*Rd = ALUout;
-            //}
-            //return 0;
-        //default:
-             ////não implementado
+    switch (WBctrl) {
+        case WBctrlFlag::WB_NONE:
+            return 0;
+        case WBctrlFlag::RegWrite:
+            if (MemtoReg) {
+                *Rd = MDR;
+            } else {
+                *Rd = ALUout;
+            }
+            return 0;
+        default:
+            //não implementado
             return 1;
-    //}
+    }
 }
 
 
