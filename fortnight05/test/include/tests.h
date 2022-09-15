@@ -32,17 +32,12 @@
 
    ----------------------------------------------------------------------------
 */
-#include "tests.h"
 
-int main()
-{
-	// create memory
-	BasicMemoryTest* memory = new BasicMemoryTest(MEMORY_SIZE);
+#include "BasicMemoryTest.h"
+#include "BasicCPUTest.h"
 
-	// create CPU
-	BasicCPUTest *cpu = new BasicCPUTest(memory);
-	
-	// Test:
-	//	Como não temos todas as instruções implementadas, faremos apenas testes.
-	return testFortnight05(cpu,memory);
-}
+#define TEST_FILE_ISUMMATION "isummation.o"
+#define TEST_FILE_FPOPS "fpops.o"
+
+
+int testFortnight05(BasicCPUTest *cpu, BasicMemoryTest* memory);
